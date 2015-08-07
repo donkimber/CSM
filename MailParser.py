@@ -4,6 +4,7 @@ import email.utils
 from email.header import decode_header
 sys.stdout = sys.stderr
 
+
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html>
 <head>
@@ -57,7 +58,10 @@ def htmlSafe(s):
     return s
 
 class MailParser:
-    def __init__(self, mboxPath):
+    def __init__(self, name, mboxDir):
+        self.mboxDir = mboxDir
+        mboxPath = os.path.join(mboxDir, "%s.mbox" % name)
+        self.filesDir = os.path.join(mboxDir, "files")
         t0 = time.time()
         self.mboxPath = mboxPath
         self.mbox = mailbox.mbox(mboxPath)
@@ -69,9 +73,8 @@ class MailParser:
         self.postsByKey = {}
         self.keyById = {}
         t1 = time.time()
-        dir = "files"
-        if not os.path.exists(dir):
-            os.mkdir(dir)
+        if not os.path.exists(self.filesDir):
+            os.mkdir(self.filesDir)
         print "Parser created in %.3fsecs" % (t1-t0)
 
     def scan(self, maxNum=0):
@@ -94,7 +97,7 @@ class MailParser:
         msg = self.mbox[key]
         post = {'key': key, 'refs': [], 'children': []}
         self.postsByKey[key] = post
-        msgPath = "files/%d.txt" % key
+        msgPath = os.path.join(self.filesDir, "%d.txt" % key)
         file(msgPath, "w").write(msg.as_string())
         try:
             mcType = msg['Content-Type']
@@ -156,7 +159,7 @@ class MailParser:
                 print "type(part):", type(part)
                 print part
             if cType.find("text/html") >= 0:
-                path = "files/%s.html" % key
+                path = os.path.join(self.filesDir, "%s.html" % key)
                 print "writing", path
                 vals = {'body': part.get_payload(decode=True),
                         'subject': subject}
@@ -165,7 +168,7 @@ class MailParser:
 
     def writeIndex(self):
         t0 = time.time()
-        f = file("index.html", "w")
+        f = file(os.path.join(self.mboxDir, "index.html"), "w")
         f.write(HTML_HEAD)
         f.write("<h1>Index of CSM posts</h1>\n")
         for key in self.roots:
@@ -239,7 +242,8 @@ class MailParser:
         print self.recipients
 
 if __name__ == '__main__':
-    mp = MailParser("CSM.mbox")
+    mboxDir = "C:/kimber/CSM"
+    mp = MailParser("CSM", mboxDir)
     #mp.scan(100)
     mp.scan()
     #mp.process(29)
