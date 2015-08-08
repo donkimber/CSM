@@ -281,13 +281,15 @@ class MailParser:
 if __name__ == '__main__':
     mboxDir = "C:/kimber/CSM"
     mp = MailParser("CSM", mboxDir)
-    #mp.scan(100)
-    mp.scan()
+    mp.scan(100)
+    #mp.scan()
     print "-"*60
     #mp.process(29)
     mp.group()
     print "-"*60
-    mp.writeIndex()
+    #mp.writeIndex()
+    print "-"*60
+    mp.writeDigest()
     print "-"*60
     mp.dump()
 

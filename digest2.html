@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+.article {
+    border-bottom: 1px dotted grey;
+    padding: 3px;
+    margin: 2px;
+}
+.article .text {
+    font-size: 12px;
+    line-height: 17px;
+    font-family: arial;
+}
+
+.article .text.short {
+    height: 500px;
+    overflow: hidden;
+}
+.article .text.full {
+    
+}
+.read-more {
+    cursor: pointer;
+    display: inline-block;    
+    font-weight: bold;
+    padding: 3px;
+    background-color: #06c;
+    color: white;
+    margin: 2px;
+}
+</style>
+</head>
+<body>
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
+<script src="readmore.js"></script>
+<script>
+var DEFAULT_HOST = "localhost:8000";
+var downX = 0;
+var downY = 0;
+
+function report(str)
+{
+   console.log(str);
+}
+
+var host = window.location.host;
+if (!host) {
+    host = DEFAULT_HOST;
+    report("no server detected - assuming "+host);
+}
+server = "http://"+host;
+
+report("server: "+server);
+
+function join(a, b)
+{
+    if (a.slice(-1) != "/" && b[0] != "/")
+        return a+"/"+b;
+    if (a.slice(-1) == "/" && b[0] == "/")
+        return a+b.slice(1);
+    return a+b;
+}
+
+
+function checkReply(obj)
+{
+    report("reply: "+JSON.stringify(obj));
+    if (obj.error) {
+       alert("Error reported by server: "+obj.error);
+    }
+}
+
+function old_loadPost(id)
+{
+    var url = join(server, "files/"+id+".html");
+    report("getting "+url);
+    $.get(url, function(data) {
+       $("#"+id+"_div").hide();
+       $("#"+id+"_div").html(data);
+       $("#"+id+"_div").readmore();
+       $("#"+id+"_div").show();
+    });
+}
+
+function loadPost(id)
+{
+    var url = join(server, "files/"+id+".html");
+    report("getting "+url);
+    $.get(url, function(data) {
+       $("#"+id+"_div").html(data);
+    });
+}
+
+function createDiv_(id)
+{
+    var url = join(server, "files/"+id+".html");
+    var id = id+"";
+    report("createDiv "+id+" url: "+url);
+    var div = $('<div/>', {
+        id: ""+id+"_div",
+    });
+    $("#posts").append(div);
+    $("#posts").append('<hr width="80%">\n');
+    loadPost(id);
+}
+
+function createDiv(id){
+   var divId = id+"_div";
+   var str = 
+      '<div class="article">\n' +
+      '  <div id="ID" class="text short">\n' +
+      '  </div>\n' +
+      '  <span class="read-more">readmore</span>\n' +
+      '</div>\n';
+   str = str.replace("ID", divId);
+   $("#posts").append(str);
+   loadPost(id);
+}
+
+var highest_post_id = 1;
+
+function getMorePosts(n)
+{
+   if (!n)
+      n = 5;
+   var max_id = highest_post_id + n;
+   while (highest_post_id < max_id) {
+       createDiv(highest_post_id);
+       highest_post_id++;
+   }
+//   $(".read-more").click(function(){
+//       toggle($(this));
+//   });
+}
+
+function toggle(x)
+{
+//    var $elem = $(this).parent().find(".text");
+    var $elem = x.parent().find(".text");
+    if($elem.hasClass("short"))
+    {
+         $elem.removeClass("short").addClass("full");
+    }
+    else
+    {
+         $elem.removeClass("full").addClass("short");
+    }
+}
+
+$( document ).ready(function() {
+    getMorePosts();
+    //setInterval(getStatus, 1000);
+    $("#getMorePosts").click(function() {
+        getMorePosts(10);
+    });
+    $(".read-more").click(function(){
+        toggle($(this));
+    });
+});
+
+</script>
+<h1>CSM Posts</h1>
+
+<div id="posts">
+</div>
+
+<input id="getMorePosts" type="button" value="more posts">
+</body>
+</html>
