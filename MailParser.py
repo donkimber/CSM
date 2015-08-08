@@ -17,6 +17,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </html>
 """
 
+TXT_TEMPLATE = """%(subject)s
+
+%(body)s
+"""
+
 HTML_HEAD = """<!DOCTYPE html>
 <html>
 <head>
@@ -43,6 +48,11 @@ def getDate(date):
         date=datetime.datetime.fromtimestamp(email.utils.mktime_tz(date_tuple))
     ds = date.strftime("%A %Y/%m/%d %H:%M:%S %z")
     return ds
+
+def getRefs(str):
+    if str:
+        str = str.replace("><", "> <").split()
+    return str
 
 def getAuthor(str):
     i = str.find("<")
@@ -97,8 +107,9 @@ class MailParser:
         msg = self.mbox[key]
         post = {'key': key, 'refs': [], 'children': []}
         self.postsByKey[key] = post
-        msgPath = os.path.join(self.filesDir, "%d.txt" % key)
+        msgPath = os.path.join(self.filesDir, "%d.msg" % key)
         file(msgPath, "w").write(msg.as_string())
+        post['msgUrl'] = "files/%d.msg" % key
         try:
             mcType = msg['Content-Type']
         except:
@@ -108,12 +119,11 @@ class MailParser:
         self.keyById[msgId] = key
         post['msgId'] = msgId
         #self.msgById[msgId] = msg
-        self.postsByKey[msgId] = post
+        #self.postsByKey[msgId] = post
         try:
-            refs = msg['References']
+            refs = getRefs(msg['References'])
             if refs:
                 #print "refs:", refs
-                refs = refs.split()
                 for ref in refs:
                     try:
                         rkey = self.keyById[ref]
@@ -137,34 +147,58 @@ class MailParser:
         post['date'] = date
         post['author'] = author
         post['subject'] = subject
-        i = 0
-        if msg.is_multipart():
-            parts = msg.get_payload()
+        path = str(key)
+        parts = {}
+        self.traverseParts(path, key, post, subject, msg, parts)
+        if "text/html" in parts:
+            url = self.saveAsHTML(key, parts['text/html'], subject)
+            post['url'] = url
+        elif "text/plain" in parts:
+            url = self.saveAsTXT(key, parts['text/plain'], subject)
+            post['url'] = url
+            print "*** Using text/plain as HTML for", key
         else:
-            #parts = [msg.get_payload()]
-            parts = [msg]
-        """
-        print "type(parts):", type(parts)
-        if type(parts) == type("str"):
-            print "*** str parts:", parts
+            print "No HTML saved for", key
+
+    def saveAsHTML(self, key, part, subject):
+        path = os.path.join(self.filesDir, "%s.html" % key)
+        #print "writing", path
+        body = part.get_payload(decode=True)
+        vals = {'body': body,
+                'subject': subject}
+        htmlStr = HTML_TEMPLATE % vals
+        file(path, "w").write(htmlStr)
+        return "files/%s.html" % key
+
+    def saveAsTXT(self, key, part, subject):
+        path = os.path.join(self.filesDir, "%s.txt" % key)
+        #print "writing", path
+        body = part.get_payload(decode=True)
+        vals = {'body': body,
+                'subject': subject}
+        htmlStr = TXT_TEMPLATE % vals
+        file(path, "w").write(htmlStr)
+        return "files/%s.txt" % key
+        
+    def traverseParts(self, path, key, post, subject, part, parts):
+        try:
+            cType = part['Content-Type']
+        except:
+            cType = "TYPE-UNKNOWN"
+            print "type(part):", type(part)
+            #print part
+        #print "traverseParts", path, cType
+        if part.is_multipart():
+            i = 0
+            for cpart in part.get_payload():
+                i += 1
+                path += ".%d" % i
+                self.traverseParts(path, key, post, subject, cpart, parts)
             return
-        """
-        #print parts
-        for part in parts:
-            i += 1
-            #print part.get_payload()
-            try:
-                cType = part['Content-Type']
-            except:
-                print "type(part):", type(part)
-                print part
-            if cType.find("text/html") >= 0:
-                path = os.path.join(self.filesDir, "%s.html" % key)
-                print "writing", path
-                vals = {'body': part.get_payload(decode=True),
-                        'subject': subject}
-                htmlStr = HTML_TEMPLATE % vals
-                file(path, "w").write(htmlStr)
+        if cType.find("text/html") >= 0:
+            parts["text/html"] = part
+        elif cType.find("text/plain") >= 0:
+            parts["text/plain"] = part
 
     def writeIndex(self):
         t0 = time.time()
@@ -186,10 +220,13 @@ class MailParser:
         dateStr = post['date']
         print key, author
         print subject
+        if 'url' not in post:
+            print "*** skipping %s because no URL" % key
+            return
         vals = {'author': getAuthor(author),
                 'dateStr': dateStr,
-                'msgUrl': "files/%s.txt" % key,
-                'htmlUrl': "files/%s.html" % key,
+                'msgUrl': "%s" % post['msgUrl'],
+                'htmlUrl': "%s" % post['url'],
                 'subject': subject, 'key': key}
         str = POST_TEMPLATE % vals
         f.write(str)
@@ -246,9 +283,12 @@ if __name__ == '__main__':
     mp = MailParser("CSM", mboxDir)
     #mp.scan(100)
     mp.scan()
+    print "-"*60
     #mp.process(29)
     mp.group()
+    print "-"*60
     mp.writeIndex()
+    print "-"*60
     mp.dump()
 
 
